@@ -64,44 +64,7 @@
       margin-top: 10px;
     }
 
-    #ui {
-      position: fixed;
-      top: 30px;
-      left: 30px;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      font-family: 'Courier New', monospace;
-    }
 
-    .lbl {
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      color: rgba(255,255,255,0.3);
-      margin-bottom: 4px;
-      margin-top: 10px;
-    }
-
-    .lbl:first-child { margin-top: 0; }
-
-    button {
-      background: none;
-      border: none;
-      color: rgba(255,255,255,0.4);
-      font-family: 'Courier New', monospace;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      font-size: 11px;
-      cursor: pointer;
-      padding: 4px 0;
-      text-align: left;
-      transition: color 0.2s;
-    }
-
-    button:hover { color: rgba(255,255,255,0.85); }
-    button.active { color: #fff; }
   </style>
 </head>
 <body>
@@ -116,19 +79,7 @@
     <div class="pct" id="loader-pct">0%</div>
   </div>
 
-  <div id="ui">
-    <div class="lbl">Renderer</div>
-    <button id="btn-ascii" class="active" onclick="setMode(0)">ascii</button>
-    <button id="btn-dots"               onclick="setMode(1)">dots</button>
-    <button id="btn-pixel"              onclick="setMode(2)">pixel</button>
-    <button id="btn-all"                onclick="setMode(3)">all</button>
-    <div class="lbl">Photo</div>
-    <button onclick="document.getElementById('file-input').click()">upload</button>
-    <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleFile(event)" />
-  </div>
-
   <script>
-    let imageSrc = null;
     let p5Instance = null;
 
     const loaderEl  = document.getElementById('loader');
@@ -145,33 +96,15 @@
       }
     }
 
-    function setMode(mode) {
-      ['ascii','dots','pixel','all'].forEach((id, i) => {
-        document.getElementById('btn-' + id).className = i === mode ? 'active' : '';
-      });
-      if (p5Instance) p5Instance.setEffectMode(mode);
-    }
-
-    function handleFile(e) {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      if (imageSrc) URL.revokeObjectURL(imageSrc);
-      imageSrc = URL.createObjectURL(file);
-      if (p5Instance) p5Instance.updateCustomImage(imageSrc);
-    }
-
     setTimeout(() => { loadingTimerDone = true; checkReady(); }, 2500);
 
-    // ── p5 sketch ─────────────────────────────────────────────────────────────
     const sketch = function(p) {
       const BUF_W = 680, BUF_H = 680;
       let buf;
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*'.split('');
       let ctx;
 
-      let customImg       = null;
-      let isManualMode    = false;
-      let currentImageUrl = '';
+
 
       let elements = [];
       let curEl    = 0;
@@ -213,7 +146,6 @@
       const easeInOutCubic = x => x < 0.5 ? 4*x*x*x : 1 - p.pow(-2*x+2, 3) / 2;
       const easeOutQuart   = x => 1 - p.pow(1 - x, 4);
 
-      // ── setup ───────────────────────────────────────────────────────────────
       p.setup = function() {
         p.createCanvas(p.windowWidth, p.windowHeight);
         p.pixelDensity(1);
@@ -253,39 +185,15 @@
         modeT       = 1;
       }
 
-      // ── exposed methods (called from outside) ───────────────────────────────
-      p.updateCustomImage = function(url) {
-        currentImageUrl = url || '';
-        if (!url) { customImg = null; return; }
-        p.loadImage(url, function(img) {
-          if (url === currentImageUrl) {
-            customImg    = img;
-            loadingPhase = false;
-          }
-        });
-      };
-
-      p.setEffectMode = function(mode) {
-        if (mode === 3) {
-          isManualMode = false;
-        } else {
-          isManualMode = true;
-          renderMode   = mode;
-          modeT        = 1;
-        }
-      };
-
       p.startExperience = function() {
         loadingPhase = false;
       };
 
-      // ── draw ────────────────────────────────────────────────────────────────
       p.draw = function() {
         const dt = p.deltaTime / 1000;
         const f  = elements[curEl];
 
-        // Loading phase
-        if (loadingPhase && !customImg) {
+        if (loadingPhase) {
           p.background(0);
           bloom = p.min(0.5, warmFrames / WARM_TARGET * 0.5);
           drawFlowerToBuffer(f, bloom, 0);
@@ -329,11 +237,9 @@
         if (densTimer > 0.8) {
           densTimer = 0;
           triggerGlitch();
-          if (!isManualMode) {
-            prevMode   = renderMode;
-            renderMode = (renderMode + 1) % 3;
-            modeT      = 0;
-          }
+          prevMode   = renderMode;
+          renderMode = (renderMode + 1) % 3;
+          modeT      = 0;
           if (densDir === 1) { gridTarget = GRID_MAX; densDir = -1; }
           else               { gridTarget = GRID_MIN; densDir =  1; }
         }
@@ -352,11 +258,9 @@
         if (phase === 'waiting') {
           phaseT += dt;
           if (phaseT > 0.6) {
-            if (!isManualMode) {
-              prevMode   = renderMode;
-              renderMode = (renderMode + 1) % 3;
-              modeT      = 0;
-            }
+            prevMode   = renderMode;
+            renderMode = (renderMode + 1) % 3;
+            modeT      = 0;
             triggerGlitch();
             startElement((curEl + 1) % elements.length);
           }
@@ -375,15 +279,7 @@
           mInfY *= 0.95;
         }
 
-        if (customImg && customImg.width > 0) {
-          buf.background(0);
-          const imgW = customImg.width, imgH = customImg.height;
-          const s = p.max(680 / imgW, 680 / imgH);
-          buf.image(customImg, (680 - imgW*s)/2, (680 - imgH*s)/2, imgW*s, imgH*s);
-          buf.loadPixels();
-        } else {
-          drawFlowerToBuffer(f, bloom, wilt);
-        }
+        drawFlowerToBuffer(f, bloom, wilt);
 
         glitchTimer -= dt;
         if (glitchTimer <= 0 && !glitchActive) {
@@ -396,7 +292,6 @@
         drawFPS();
       };
 
-      // ── Glitch ───────────────────────────────────────────────────────────────
       function triggerGlitch() {
         glitchActive    = true;
         glitchIntensity = p.random(0.4, 1.0);
@@ -449,7 +344,6 @@
         }
       }
 
-      // ── Flower drawing ───────────────────────────────────────────────────────
       function drawFlowerToBuffer(f, bl, wl) {
         buf.background(0);
         buf.noStroke();
@@ -556,7 +450,6 @@
         const cosW = p.cos(wiltTilt), sinW = p.sin(wiltTilt);
         const items = [];
 
-        // Sepals
         if (f.sepals && bl < 0.7) {
           const numS    = f.sepals;
           const openAng = easeInOutCubic(bl) * p.HALF_PI * 0.9;
@@ -579,11 +472,9 @@
           }
         }
 
-        // Center
         const cAlpha = p.constrain((bl - 0.45) / 0.3, 0, 1) * (1 - wl);
         if (cAlpha > 0) items.push({ rz:0, tp:'c', sx:0, sy:0, sa:0, alpha:cAlpha });
 
-        // Petals
         for (let layer = f.layers; layer >= 0; layer--) {
           const lr         = layer / f.layers;
           const layerDelay = (1 - lr) * 0.35;
@@ -712,7 +603,6 @@
         }
       }
 
-      // ── Render buffer to screen ──────────────────────────────────────────────
       function renderToScreen() {
         const px      = buf.pixels;
         const g       = p.max(4, p.round(grid));
@@ -782,7 +672,6 @@
         p.textAlign(p.CENTER, p.CENTER);
       }
 
-      // ── Input ────────────────────────────────────────────────────────────────
       p.mousePressed = function() {
         if (loadingPhase) return;
         triggerGlitch();
@@ -798,7 +687,6 @@
       };
     };
 
-    // ── Launch p5 ─────────────────────────────────────────────────────────────
     p5Instance = new p5(sketch, document.getElementById('canvas-container'));
   </script>
 </body>
